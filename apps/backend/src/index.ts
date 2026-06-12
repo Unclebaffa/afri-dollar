@@ -1,8 +1,10 @@
+import path from 'path';
+
 import cors from 'cors';
 import { config } from 'dotenv';
 import express, { json, urlencoded } from 'express';
 import helmet from 'helmet';
-import path from 'path';
+
 import prisma from './config/database';
 
 // Load backend-level .env file
@@ -35,7 +37,7 @@ app.get('/api/v1', (_req, res) => {
 });
 
 // Database connection check and server start
-async function startServer() {
+async function startServer(): Promise<void> {
   try {
     // Check database connection
     await prisma.$connect();
@@ -50,17 +52,15 @@ async function startServer() {
   }
 }
 
-startServer();
+void startServer();
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
+process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
-  await prisma.$disconnect();
-  process.exit(0);
+  void prisma.$disconnect().then(() => process.exit(0));
 });
 
-process.on('SIGINT', async () => {
+process.on('SIGINT', () => {
   console.log('SIGINT signal received: closing HTTP server');
-  await prisma.$disconnect();
-  process.exit(0);
+  void prisma.$disconnect().then(() => process.exit(0));
 });

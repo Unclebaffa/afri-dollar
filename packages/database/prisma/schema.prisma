@@ -69,7 +69,7 @@ model Wallet {
   secretKeyEncrypted String
   
   walletType      String   // 'business', 'treasury', 'payroll'
-  network         String   @default('testnet') // 'testnet', 'mainnet'
+  network         String   @default("testnet") // 'testnet', 'mainnet'
   
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
@@ -107,7 +107,7 @@ model Transaction {
   wallet          Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
   
   type            String   // 'deposit', 'withdrawal', 'transfer', 'exchange', 'payroll'
-  status          String   @default('pending') // 'pending', 'completed', 'failed', 'cancelled'
+  status          String   @default("pending") // 'pending', 'completed', 'failed', 'cancelled'
   
   amount          String
   assetCode       String
@@ -139,15 +139,15 @@ model KYCRecord {
   provider    String   // 'onfido', 'sumsub', etc.
   providerId  String?  // External provider's ID
   
-  status      String   @default('pending') // 'pending', 'approved', 'rejected', 'review'
+  status      String   @default("pending") // 'pending', 'approved', 'rejected', 'review'
   
   documentType String?
   documentNumber String?
   
-  metadata    Json?
+  metadata        Json?
   reviewedAt  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -167,8 +167,8 @@ model ExchangeRate {
   validFrom   DateTime @default(now())
   validUntil  DateTime?
   
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([fromAsset, toAsset, validFrom])
   @@index([fromAsset, toAsset])
@@ -190,7 +190,7 @@ model AuditLog {
   metadata    Json?
   success     Boolean  @default(true)
   
-  createdAt   DateTime @default(now())
+  createdAt       DateTime @default(now())
 
   @@index([userId])
   @@index([action])

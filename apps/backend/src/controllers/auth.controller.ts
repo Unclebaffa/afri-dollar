@@ -35,25 +35,34 @@ const refreshTokenSchema = z.object({
 });
 
 /**
- * Map known domain errors to user-friendly messages
- * Returns generic message for unknown errors to avoid leaking internal details
+ * Map known domain errors to status codes and user-friendly messages
+ * Returns generic 500 + message for unknown errors to avoid leaking internal details
  */
-function getErrorMessage(error: Error): string {
-  const knownErrors: Record<string, string> = {
-    'User with this email already exists': 'Email already registered',
-    'User with this phone number already exists': 'Phone number already registered',
-    'Invalid email or password': 'Invalid credentials',
-    'User account is inactive': 'Account is inactive',
-    'Invalid refresh token': 'Invalid refresh token',
-    'Refresh token has been revoked': 'Refresh token has been revoked',
-    'Refresh token has expired': 'Refresh token has expired',
-    'Refresh token does not belong to this user': 'Invalid refresh token',
-    'User not found': 'User not found',
-    'JWT_SECRET environment variable is required': 'Server configuration error',
-    'JWT_REFRESH_SECRET environment variable is required': 'Server configuration error',
+function getErrorResponse(error: Error): { status: number; message: string } {
+  const errorMap: Record<string, { status: number; message: string }> = {
+    'User with this email already exists': { status: 400, message: 'Email already registered' },
+    'User with this phone number already exists': {
+      status: 400,
+      message: 'Phone number already registered',
+    },
+    'Invalid email or password': { status: 401, message: 'Invalid credentials' },
+    'User account is inactive': { status: 403, message: 'Account is inactive' },
+    'Invalid refresh token': { status: 401, message: 'Invalid refresh token' },
+    'Refresh token has been revoked': { status: 401, message: 'Refresh token has been revoked' },
+    'Refresh token has expired': { status: 401, message: 'Refresh token has expired' },
+    'Refresh token does not belong to this user': { status: 401, message: 'Invalid refresh token' },
+    'User not found': { status: 404, message: 'User not found' },
+    'JWT_SECRET environment variable is required': {
+      status: 500,
+      message: 'Server configuration error',
+    },
+    'JWT_REFRESH_SECRET environment variable is required': {
+      status: 500,
+      message: 'Server configuration error',
+    },
   };
 
-  return knownErrors[error.message] || 'An error occurred';
+  return errorMap[error.message] || { status: 500, message: 'An error occurred' };
 }
 
 export const AuthController = {
@@ -105,9 +114,10 @@ export const AuthController = {
           metadata: { error: error.message },
         });
 
-        res.status(400).json({
+        const { status, message } = getErrorResponse(error);
+        res.status(status).json({
           success: false,
-          error: getErrorMessage(error),
+          error: message,
         });
         return;
       }
@@ -166,9 +176,10 @@ export const AuthController = {
           metadata: { error: error.message },
         });
 
-        res.status(401).json({
+        const { status, message } = getErrorResponse(error);
+        res.status(status).json({
           success: false,
-          error: getErrorMessage(error),
+          error: message,
         });
         return;
       }
@@ -236,9 +247,10 @@ export const AuthController = {
           });
         }
 
-        res.status(500).json({
+        const { status, message } = getErrorResponse(error);
+        res.status(status).json({
           success: false,
-          error: getErrorMessage(error),
+          error: message,
         });
         return;
       }
@@ -296,9 +308,10 @@ export const AuthController = {
           metadata: { error: error.message },
         });
 
-        res.status(401).json({
+        const { status, message } = getErrorResponse(error);
+        res.status(status).json({
           success: false,
-          error: getErrorMessage(error),
+          error: message,
         });
         return;
       }
@@ -357,18 +370,12 @@ export const AuthController = {
           });
         }
 
-        // Return 404 only for user not found, 500 for other errors
-        if (error.message === 'User not found') {
-          res.status(404).json({
-            success: false,
-            error: getErrorMessage(error),
-          });
-        } else {
-          res.status(500).json({
-            success: false,
-            error: 'Internal server error',
-          });
-        }
+        // Return appropriate status based on error type
+        const { status, message } = getErrorResponse(error);
+        res.status(status).json({
+          success: false,
+          error: message,
+        });
         return;
       }
       res.status(500).json({

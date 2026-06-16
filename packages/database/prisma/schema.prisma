@@ -250,5 +250,4 @@ model RefreshToken {
   updatedAt    DateTime @updatedAt
 
   @@index([userId])
-  @@index([tokenHash])
 }

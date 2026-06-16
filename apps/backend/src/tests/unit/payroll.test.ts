@@ -466,6 +466,11 @@ describe('PayrollService', () => {
       await expect(PayrollService.processPayrollBatch('batch-123', 'user-1')).rejects.toThrow(
         'Batch is already being processed'
       );
+
+      expect(mockLoadAccount).not.toHaveBeenCalled();
+      expect(mockSubmitTransaction).not.toHaveBeenCalled();
+      expect(mockPayrollItemUpdate).not.toHaveBeenCalled();
+      expect(mockPayrollBatchUpdate).not.toHaveBeenCalled();
     });
 
     it('should revert batch status to approved and log failure on decryption error', async () => {

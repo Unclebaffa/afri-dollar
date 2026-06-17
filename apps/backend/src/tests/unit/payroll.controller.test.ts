@@ -24,20 +24,27 @@ const mockAddPayrollItem = PayrollService.addPayrollItem as jest.Mock;
 const mockProcessPayrollBatch = PayrollService.processPayrollBatch as jest.Mock;
 const mockGetPayrollHistory = PayrollService.getPayrollHistory as jest.Mock;
 
-function createMockResponse(): Response & { statusCode: number; body: unknown } {
-  const res = {
+interface MockResponse {
+  statusCode: number;
+  body: unknown;
+  status(code: number): MockResponse;
+  json(payload: unknown): MockResponse;
+}
+
+function createMockResponse(): MockResponse {
+  const res: MockResponse = {
     statusCode: 200,
-    body: undefined as unknown,
-    status(code: number): Response & { statusCode: number; body: unknown } {
+    body: undefined,
+    status(code: number) {
       this.statusCode = code;
       return this;
     },
-    json(payload: unknown): Response & { statusCode: number; body: unknown } {
+    json(payload: unknown) {
       this.body = payload;
       return this;
     },
   };
-  return res as Response & { statusCode: number; body: unknown };
+  return res;
 }
 
 function createAuthRequest(overrides: Partial<AuthRequest> = {}): AuthRequest {
@@ -58,7 +65,7 @@ describe('PayrollController', () => {
     const req = createAuthRequest({ user: undefined });
     const res = createMockResponse();
 
-    await PayrollController.listBatches(req, res);
+    await PayrollController.listBatches(req, res as unknown as Response);
 
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({ success: false, error: 'Unauthorized' });
@@ -73,7 +80,7 @@ describe('PayrollController', () => {
     const mockBatch = { id: 'batch-1', name: 'June Payroll', status: 'pending' };
     mockCreatePayrollBatch.mockResolvedValue(mockBatch);
 
-    await PayrollController.createBatch(req, res);
+    await PayrollController.createBatch(req, res as unknown as Response);
 
     expect(mockCreatePayrollBatch).toHaveBeenCalledWith(
       { name: 'June Payroll', description: 'June payouts', walletId: 'wallet-1' },
@@ -87,7 +94,7 @@ describe('PayrollController', () => {
     const req = createAuthRequest({ body: { name: '', walletId: '' } });
     const res = createMockResponse();
 
-    await PayrollController.createBatch(req, res);
+    await PayrollController.createBatch(req, res as unknown as Response);
 
     expect(res.statusCode).toBe(400);
     expect(res.body).toEqual(
@@ -106,7 +113,7 @@ describe('PayrollController', () => {
     const res = createMockResponse();
     mockCreatePayrollBatch.mockRejectedValue(new Error('Wallet does not belong to user'));
 
-    await PayrollController.createBatch(req, res);
+    await PayrollController.createBatch(req, res as unknown as Response);
 
     expect(res.statusCode).toBe(403);
     expect(res.body).toEqual({ success: false, error: 'Wallet does not belong to user' });
@@ -126,7 +133,7 @@ describe('PayrollController', () => {
     const mockItem = { id: 'item-1', payrollBatchId: 'batch-1', status: 'pending' };
     mockAddPayrollItem.mockResolvedValue(mockItem);
 
-    await PayrollController.addItem(req, res);
+    await PayrollController.addItem(req, res as unknown as Response);
 
     expect(mockAddPayrollItem).toHaveBeenCalledWith(
       'batch-1',
@@ -142,7 +149,7 @@ describe('PayrollController', () => {
     const res = createMockResponse();
     mockGetPayrollBatch.mockRejectedValue(new Error('Payroll batch not found'));
 
-    await PayrollController.getBatch(req, res);
+    await PayrollController.getBatch(req, res as unknown as Response);
 
     expect(mockGetPayrollBatch).toHaveBeenCalledWith('missing-batch', 'user-1');
     expect(res.statusCode).toBe(404);
@@ -154,7 +161,7 @@ describe('PayrollController', () => {
     const res = createMockResponse();
     mockProcessPayrollBatch.mockRejectedValue(new Error('Batch is already being processed'));
 
-    await PayrollController.processBatch(req, res);
+    await PayrollController.processBatch(req, res as unknown as Response);
 
     expect(res.statusCode).toBe(409);
     expect(res.body).toEqual({ success: false, error: 'Batch is already being processed' });
@@ -166,7 +173,7 @@ describe('PayrollController', () => {
     const mockHistory = [{ id: 'batch-1', items: [] }];
     mockGetPayrollHistory.mockResolvedValue(mockHistory);
 
-    await PayrollController.getHistory(req, res);
+    await PayrollController.getHistory(req, res as unknown as Response);
 
     expect(mockGetPayrollHistory).toHaveBeenCalledWith('user-1');
     expect(res.statusCode).toBe(200);

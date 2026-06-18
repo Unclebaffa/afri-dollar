@@ -21,6 +21,7 @@ jest.mock('../../config/database', () => ({
     auditLog: {
       create: jest.fn(),
     },
+    $transaction: jest.fn(),
   },
 }));
 
@@ -30,11 +31,16 @@ const mockExchangeRateFindFirst = prisma.exchangeRate.findFirst as jest.Mock;
 const mockTransactionCreate = prisma.transaction.create as jest.Mock;
 const mockTransactionFindMany = prisma.transaction.findMany as jest.Mock;
 const mockAuditLogCreate = prisma.auditLog.create as jest.Mock;
+const mock$transaction = prisma.$transaction as jest.Mock;
 
 describe('TreasuryService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuditLogCreate.mockResolvedValue({});
+    // Interactive transactions run the callback against the same mocked client.
+    mock$transaction.mockImplementation((cb: (tx: typeof prisma) => Promise<unknown>) =>
+      cb(prisma)
+    );
   });
 
   describe('getTreasuryBalance', () => {
@@ -174,6 +180,39 @@ describe('TreasuryService', () => {
       expect(auditData).toContainEqual(
         expect.objectContaining({ action: 'treasury_rebalance', success: true })
       );
+    });
+
+    it('rejects when a held asset is omitted from the targets', async () => {
+      // Treasury holds USD and USDC but only USD is provided as a target.
+      await expect(
+        TreasuryService.rebalance([{ assetCode: 'USD', targetAllocation: 100 }], 'admin-1')
+      ).rejects.toThrow('All held assets must be included in rebalance targets');
+      expect(mockTransactionCreate).not.toHaveBeenCalled();
+    });
+
+    it('fails atomically when an operation write fails part way through', async () => {
+      // First operation (USD) succeeds, the second (USDC) fails: the whole
+      // rebalance must reject rather than returning a partial result.
+      mockTransactionCreate
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          createdAt: new Date('2026-06-18T00:00:00Z'),
+          assetCode: 'USD',
+        })
+        .mockRejectedValueOnce(new Error('db write failed'));
+
+      await expect(
+        TreasuryService.rebalance(
+          [
+            { assetCode: 'USD', targetAllocation: 50 },
+            { assetCode: 'USDC', targetAllocation: 50 },
+          ],
+          'admin-1'
+        )
+      ).rejects.toThrow('db write failed');
+
+      // All writes were routed through the atomic $transaction wrapper.
+      expect(mock$transaction).toHaveBeenCalledTimes(1);
     });
 
     it('skips assets that are already at their target allocation', async () => {

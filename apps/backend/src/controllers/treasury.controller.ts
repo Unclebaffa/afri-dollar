@@ -20,7 +20,8 @@ const rebalanceSchema = z.object({
           .max(100, 'Target allocation must be between 0 and 100'),
       })
     )
-    .min(1, 'At least one rebalance target is required'),
+    .min(1, 'At least one rebalance target is required')
+    .max(50, 'A maximum of 50 rebalance targets is allowed per request'),
 });
 
 const historyQuerySchema = z.object({

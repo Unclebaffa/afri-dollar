@@ -136,8 +136,11 @@ async function aggregatePositions(walletIds: string[]): Promise<AggregatedPositi
     try {
       amount = toStroops(balance.balance);
     } catch {
-      // Skip malformed balances rather than breaking the whole aggregation.
-      continue;
+      // Surface malformed data instead of silently under-reporting treasury
+      // value, which would corrupt balance reporting and rebalance decisions.
+      throw new Error(
+        `Malformed treasury balance for asset ${balance.assetCode} on wallet ${balance.walletId}: "${balance.balance}"`
+      );
     }
     if (existing) {
       existing.stroops += amount;
@@ -160,6 +163,8 @@ async function aggregatePositions(walletIds: string[]): Promise<AggregatedPositi
 async function buildPositions(aggregated: AggregatedPosition[]): Promise<{
   positions: TreasuryPosition[];
   totalValueUsd: number;
+  // Unrounded USD value per asset key, for precise downstream maths (rebalance).
+  valueByKey: Map<string, number>;
 }> {
   const valued = await Promise.all(
     aggregated.map(async (entry) => {
@@ -171,6 +176,10 @@ async function buildPositions(aggregated: AggregatedPosition[]): Promise<{
   );
 
   const totalValueUsd = valued.reduce((sum, entry) => sum + entry.valueUsd, 0);
+
+  const valueByKey = new Map<string, number>(
+    valued.map((entry) => [`${entry.assetCode}:${entry.assetIssuer ?? ''}`, entry.valueUsd])
+  );
 
   const positions: TreasuryPosition[] = valued
     .map((entry) => ({
@@ -184,7 +193,7 @@ async function buildPositions(aggregated: AggregatedPosition[]): Promise<{
     // Surface the largest holdings first.
     .sort((a, b) => Number(b.valueUsd) - Number(a.valueUsd));
 
-  return { positions, totalValueUsd };
+  return { positions, totalValueUsd, valueByKey };
 }
 
 /**
@@ -304,7 +313,7 @@ export const TreasuryService = {
     }
 
     const aggregated = await aggregatePositions(walletIds);
-    const { positions, totalValueUsd } = await buildPositions(aggregated);
+    const { totalValueUsd, valueByKey } = await buildPositions(aggregated);
 
     if (totalValueUsd <= 0) {
       await logAudit(adminUserId, 'treasury_rebalance_failed', null, false, {
@@ -313,18 +322,35 @@ export const TreasuryService = {
       throw new Error('Treasury has no value to rebalance');
     }
 
-    const currentByKey = new Map(
-      positions.map((p) => [`${p.assetCode}:${p.assetIssuer ?? ''}`, p])
-    );
+    // Every currently-held asset with USD value must be covered by a target so
+    // that positions omitted from the request are explicitly reduced (target 0)
+    // rather than silently left untouched, which would skew the allocations.
+    const targetKeys = new Set(targets.map((t) => `${t.assetCode}:${t.assetIssuer ?? ''}`));
+    const uncovered = aggregated
+      .map((entry) => ({ entry, key: `${entry.assetCode}:${entry.assetIssuer ?? ''}` }))
+      .filter(({ key }) => (valueByKey.get(key) ?? 0) > 0 && !targetKeys.has(key))
+      .map(({ entry }) => entry.assetCode);
+
+    if (uncovered.length > 0) {
+      await logAudit(adminUserId, 'treasury_rebalance_failed', null, false, {
+        error: 'Held assets missing from rebalance targets',
+        uncovered,
+      });
+      throw new Error(
+        `All held assets must be included in rebalance targets (use 0 allocation to fully reduce a position): ${uncovered.join(', ')}`
+      );
+    }
 
     // The first treasury wallet anchors the recorded operations.
     const primaryWalletId = walletIds[0];
 
-    const operations: TreasuryOperation[] = [];
+    // Compute the required operations up front (reads only) so the writes can be
+    // committed atomically below.
+    const operationData: Prisma.TransactionUncheckedCreateInput[] = [];
     for (const target of targets) {
       const key = `${target.assetCode}:${target.assetIssuer ?? ''}`;
-      const current = currentByKey.get(key);
-      const currentValueUsd = current ? Number(current.valueUsd) : 0;
+      // Use the unrounded internal USD value to avoid precision loss.
+      const currentValueUsd = valueByKey.get(key) ?? 0;
       const desiredValueUsd = (totalValueUsd * target.targetAllocation) / 100;
       const deltaUsd = desiredValueUsd - currentValueUsd;
 
@@ -343,36 +369,53 @@ export const TreasuryService = {
       const amountString = fromStroops(toStroops(deltaAmount.toFixed(ASSET_DECIMALS)));
       const direction = deltaUsd > 0 ? 'increase' : 'decrease';
 
-      const tx = await prisma.transaction.create({
+      operationData.push({
+        userId: adminUserId,
+        walletId: primaryWalletId,
+        type: 'rebalance',
+        status: 'completed',
+        amount: amountString,
+        assetCode: target.assetCode,
+        assetIssuer: target.assetIssuer || null,
+        metadata: {
+          direction,
+          targetAllocation: target.targetAllocation,
+          currentValueUsd: toUsdString(currentValueUsd),
+          desiredValueUsd: toUsdString(desiredValueUsd),
+          deltaUsd: toUsdString(deltaUsd),
+        },
+        completedAt: new Date(),
+      });
+    }
+
+    // Persist all operations and the audit record atomically: either every write
+    // commits or none do, preventing a partially-applied rebalance.
+    const operations = await prisma.$transaction(async (tx) => {
+      const created: TreasuryOperation[] = [];
+      for (const data of operationData) {
+        const record = await tx.transaction.create({ data });
+        created.push(mapToOperation(record));
+      }
+
+      await tx.auditLog.create({
         data: {
           userId: adminUserId,
-          walletId: primaryWalletId,
-          type: 'rebalance',
-          status: 'completed',
-          amount: amountString,
-          assetCode: target.assetCode,
-          assetIssuer: target.assetIssuer || null,
+          action: 'treasury_rebalance',
+          resource: 'treasury',
+          resourceId: primaryWalletId,
+          success: true,
           metadata: {
-            direction,
-            targetAllocation: target.targetAllocation,
-            currentValueUsd: toUsdString(currentValueUsd),
-            desiredValueUsd: toUsdString(desiredValueUsd),
-            deltaUsd: toUsdString(deltaUsd),
+            totalValueUsd: toUsdString(totalValueUsd),
+            operationCount: operationData.length,
+            targets: targets.map((t) => ({
+              assetCode: t.assetCode,
+              targetAllocation: t.targetAllocation,
+            })),
           },
-          completedAt: new Date(),
         },
       });
 
-      operations.push(mapToOperation(tx));
-    }
-
-    await logAudit(adminUserId, 'treasury_rebalance', primaryWalletId, true, {
-      totalValueUsd: toUsdString(totalValueUsd),
-      operationCount: operations.length,
-      targets: targets.map((t) => ({
-        assetCode: t.assetCode,
-        targetAllocation: t.targetAllocation,
-      })),
+      return created;
     });
 
     return operations;

@@ -5,7 +5,7 @@
 
 export type TreasuryOperationType = 'deposit' | 'withdrawal' | 'rebalance' | 'transfer';
 
-export type TreasuryOperationStatus = 'pending' | 'completed' | 'failed';
+export type TreasuryOperationStatus = 'pending' | 'completed' | 'failed' | 'cancelled';
 
 /**
  * A single asset position held within the platform treasury.

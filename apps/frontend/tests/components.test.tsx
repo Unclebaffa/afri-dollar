@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
 
@@ -115,7 +116,7 @@ describe('UI Component Library Tests', () => {
     it('renders options correctly', () => {
       render(<Select label="Currency" options={mockOptions} />);
       expect(screen.getByLabelText('Currency')).toBeInTheDocument();
-      expect(screen.getByRole('combobox')).toHaveLength(2);
+      expect(screen.getAllByRole('option')).toHaveLength(2);
       expect(screen.getByRole('option', { name: 'US Dollar' })).toBeInTheDocument();
     });
 

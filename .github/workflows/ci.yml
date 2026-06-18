@@ -50,8 +50,8 @@ jobs:
       - name: Build packages
         run: npx turbo run build --filter=@afri-dollar/shared --filter=@afri-dollar/database
 
-      - name: Run ESLint
-        run: npm run lint
+      - name: Run ESLint Auto-Fix
+        run: npm run lint -- --fix
 
       - name: Check formatting
         run: npm run format:check

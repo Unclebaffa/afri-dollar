@@ -170,5 +170,61 @@ describe('WalletService', () => {
 
       expect(mockWalletCreate).not.toHaveBeenCalled();
     });
+
+    it('should throw 504 on abort/timeout', async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+      });
+      (global.fetch as jest.Mock).mockRejectedValue(
+        new DOMException('The operation was aborted', 'AbortError')
+      );
+
+      await expect(
+        WalletService.createWallet({
+          userId: 'user-1',
+          walletType: 'payroll',
+          network: 'testnet',
+        })
+      ).rejects.toThrow('Friendbot funding request timed out');
+
+      expect(mockWalletCreate).not.toHaveBeenCalled();
+    });
+
+    it('should throw 503 on network error', async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+      });
+      (global.fetch as jest.Mock).mockRejectedValue(new TypeError('fetch failed'));
+
+      await expect(
+        WalletService.createWallet({
+          userId: 'user-1',
+          walletType: 'payroll',
+          network: 'testnet',
+        })
+      ).rejects.toThrow('Friendbot funding failed: network error');
+
+      expect(mockWalletCreate).not.toHaveBeenCalled();
+    });
+
+    it('should throw 502 on unexpected error', async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+      });
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('Something unexpected'));
+
+      await expect(
+        WalletService.createWallet({
+          userId: 'user-1',
+          walletType: 'payroll',
+          network: 'testnet',
+        })
+      ).rejects.toThrow('Friendbot funding failed: Error: Something unexpected');
+
+      expect(mockWalletCreate).not.toHaveBeenCalled();
+    });
   });
 });

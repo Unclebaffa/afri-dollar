@@ -25,7 +25,16 @@ async function fundTestnetAccount(publicKey: string): Promise<void> {
     if (error instanceof AppError) {
       throw error;
     }
-    throw new AppError(504, 'Friendbot funding timed out');
+
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new AppError(504, 'Friendbot funding request timed out');
+    }
+
+    if (error instanceof TypeError) {
+      throw new AppError(503, 'Friendbot funding failed: network error');
+    }
+
+    throw new AppError(502, `Friendbot funding failed: ${String(error)}`);
   } finally {
     clearTimeout(timeout);
   }

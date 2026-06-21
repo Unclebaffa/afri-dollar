@@ -51,6 +51,7 @@ const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockTransactionCreate = prisma.transaction.create as jest.Mock;
 const mockTransactionFindUnique = prisma.transaction.findUnique as jest.Mock;
 const mockTransactionFindMany = prisma.transaction.findMany as jest.Mock;
+const mockTransactionUpdate = prisma.transaction.update as jest.Mock;
 const mockTransactionUpdateMany = prisma.transaction.updateMany as jest.Mock;
 const mockAuditLogCreate = prisma.auditLog.create as jest.Mock;
 
@@ -97,7 +98,8 @@ describe('PaymentService', () => {
       baseOptions.destinationAddress = mockDestination;
     });
 
-    it('should create a payment successfully', async () => {
+    it('should create a payment successfully and persist memo', async () => {
+      const memo = 'INV-2026-001';
       mockWalletFindUnique.mockResolvedValue({
         id: mockWalletId,
         userId: mockUserId,
@@ -125,7 +127,10 @@ describe('PaymentService', () => {
       };
       mockTransactionCreate.mockResolvedValue(mockTx);
 
-      const result = await PaymentService.createCrossBorderPayment(baseOptions, mockUserId);
+      const result = await PaymentService.createCrossBorderPayment(
+        { ...baseOptions, memo },
+        mockUserId
+      );
 
       expect(result.payment.id).toBe('tx-1');
       expect(result.payment.status).toBe('created');
@@ -133,6 +138,13 @@ describe('PaymentService', () => {
       expect(result.assetCode).toBe('XLM');
       expect(result.complianceChecks.sanctionsScreening).toBe('passed');
       expect(mockTransactionCreate).toHaveBeenCalledTimes(1);
+      expect(mockTransactionCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: expect.objectContaining({ memo }),
+          }),
+        })
+      );
     });
 
     it('should throw on invalid destination address', async () => {
@@ -193,6 +205,29 @@ describe('PaymentService', () => {
           {
             ...baseOptions,
             beneficiaryInfo: { name: 'Test', country: 'KP' },
+          },
+          mockUserId
+        )
+      ).rejects.toThrow('Payment blocked: sanctions screening failed');
+    });
+
+    it('should block payment to sanctioned country with lowercase code', async () => {
+      mockWalletFindUnique.mockResolvedValue({
+        id: mockWalletId,
+        userId: mockUserId,
+        publicKey: mockPublicKey,
+      });
+      mockUserFindUnique.mockResolvedValue({
+        id: mockUserId,
+        isVerified: true,
+        kycRecords: [],
+      });
+
+      await expect(
+        PaymentService.createCrossBorderPayment(
+          {
+            ...baseOptions,
+            beneficiaryInfo: { name: 'Test', country: 'kp' },
           },
           mockUserId
         )
@@ -447,6 +482,36 @@ describe('PaymentService', () => {
         'Payment is already being processed'
       );
     });
+
+    it('should handle wallet decryption failure and roll back status', async () => {
+      mockTransactionFindUnique.mockResolvedValue({
+        id: 'tx-1',
+        status: 'created',
+        userId: mockUserId,
+        metadata: crossBorderMetadata,
+        wallet: { secretKeyEncrypted: 'invalid:encrypted:data' },
+      });
+      mockTransactionUpdateMany.mockResolvedValue({ count: 1 });
+      mockTransactionUpdate.mockResolvedValue({});
+
+      await expect(PaymentService.processPayment('tx-1', mockUserId)).rejects.toThrow(
+        'Wallet decryption failure'
+      );
+
+      expect(mockTransactionUpdate).toHaveBeenCalledWith({
+        where: { id: 'tx-1' },
+        data: { status: 'created' },
+      });
+      expect(mockAuditLogCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'payment_process_failed',
+            resourceId: 'tx-1',
+            success: false,
+          }),
+        })
+      );
+    });
   });
 
   describe('getPaymentHistory', () => {
@@ -498,6 +563,23 @@ describe('PaymentService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             walletId: mockWalletId,
+          }),
+        })
+      );
+    });
+
+    it('should filter by cross_border paymentType at query level', async () => {
+      mockTransactionFindMany.mockResolvedValue([]);
+
+      await PaymentService.getPaymentHistory(mockUserId);
+
+      expect(mockTransactionFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            metadata: {
+              path: ['paymentType'],
+              equals: 'cross_border',
+            },
           }),
         })
       );

@@ -1,6 +1,5 @@
 import { Prisma, Transaction } from '@afri-dollar/database';
 import {
-  Horizon,
   Keypair,
   Networks,
   Operation,
@@ -19,8 +18,9 @@ import type {
 } from '../types/payment.types';
 import { decrypt } from '../utils/crypto';
 
-const horizonUrl = process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
-const server = new Horizon.Server(horizonUrl);
+import { StellarService } from './stellar.service';
+
+const server = StellarService.getHorizonServer();
 
 function getHorizonErrorMessage(error: unknown): string {
   if (error && typeof error === 'object') {

@@ -11,6 +11,7 @@ import authRouter from './routes/auth.routes';
 import fxRouter from './routes/fx.routes';
 import paymentRouter from './routes/payment.routes';
 import payrollRouter from './routes/payroll.routes';
+import stellarRouter from './routes/stellar.routes';
 import treasuryRouter from './routes/treasury.routes';
 import walletRouter from './routes/wallet.routes';
 // Load backend-level .env file
@@ -57,6 +58,10 @@ app.use('/api/v1/payments', paymentRouter);
 // Payroll routes
 // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
 app.use('/api/v1/payroll', payrollRouter);
+
+// Stellar routes
+// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+app.use('/api/v1/stellar', stellarRouter);
 
 // Treasury routes (admin only)
 // eslint-disable-next-line @typescript-eslint/no-unsafe-argument

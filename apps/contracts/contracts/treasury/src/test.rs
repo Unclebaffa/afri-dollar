@@ -543,3 +543,50 @@ fn multiple_withdrawals_tracked_independently() {
     assert!(r1.executed);
     assert!(!r2.executed);
 }
+
+#[test]
+fn emergency_override_already_executed_fails() {
+    let (env, _contract_id, client, _admin, requester, _approver, asset) =
+        setup_with_timelock();
+    let to = Address::generate(&env);
+
+    let approver1 = Address::generate(&env);
+    let approvers = vec![&env, approver1.clone()];
+
+    env.mock_all_auths();
+    client.set_emergency_approvers(&approvers, &1);
+
+    let id = client.request_withdrawal(&requester, &to, &asset, &1000);
+
+    // First, execute normally after timelock expires
+    env.ledger().set_timestamp(env.ledger().timestamp() + 3601);
+    client.execute_withdrawal(&id);
+
+    // Now try to execute emergency override
+    let override_approvers = vec![&env, approver1];
+    let result = client.try_emergency_override(&id, &override_approvers);
+    assert_eq!(result, Err(Ok(TreasuryError::RequestAlreadyExecuted)));
+}
+
+#[test]
+fn emergency_override_already_cancelled_fails() {
+    let (env, _contract_id, client, _admin, requester, _approver, asset) =
+        setup_with_timelock();
+    let to = Address::generate(&env);
+
+    let approver1 = Address::generate(&env);
+    let approvers = vec![&env, approver1.clone()];
+
+    env.mock_all_auths();
+    client.set_emergency_approvers(&approvers, &1);
+
+    let id = client.request_withdrawal(&requester, &to, &asset, &1000);
+
+    // First, cancel the request
+    client.cancel_withdrawal(&id);
+
+    // Now try to execute emergency override
+    let override_approvers = vec![&env, approver1];
+    let result = client.try_emergency_override(&id, &override_approvers);
+    assert_eq!(result, Err(Ok(TreasuryError::RequestAlreadyCancelled)));
+}

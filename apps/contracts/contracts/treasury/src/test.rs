@@ -50,6 +50,24 @@ fn setup_with_timelock() -> (
     (env, contract_id, client, admin, requester, approver, asset)
 }
 
+fn setup_emergency(
+    env: &Env,
+    client: &TreasuryContractClient<'static>,
+) -> (Address, Address, soroban_sdk::Vec<Address>) {
+    let approver1 = Address::generate(env);
+    let approver2 = Address::generate(env);
+    let approvers = vec![env, approver1.clone(), approver2.clone()];
+    client.set_emergency_approvers(&approvers, &2);
+    (approver1, approver2, approvers)
+}
+
+fn setup_emergency_single(env: &Env, client: &TreasuryContractClient<'static>) -> Address {
+    let approver1 = Address::generate(env);
+    let approvers = vec![env, approver1.clone()];
+    client.set_emergency_approvers(&approvers, &1);
+    approver1
+}
+
 // ---------------------------------------------------------------------------
 // Initialization
 // ---------------------------------------------------------------------------
@@ -381,13 +399,8 @@ fn cancel_withdrawal_already_cancelled_fails() {
 fn emergency_override_executes_before_unlock() {
     let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
-
-    let approver1 = Address::generate(&env);
-    let approver2 = Address::generate(&env);
-    let approvers = vec![&env, approver1.clone(), approver2.clone()];
-
     env.mock_all_auths();
-    client.set_emergency_approvers(&approvers, &2);
+    let (approver1, approver2, _) = setup_emergency(&env, &client);
 
     let id = client.request_withdrawal(&requester, &to, &asset, &1000);
 
@@ -403,13 +416,8 @@ fn emergency_override_executes_before_unlock() {
 fn emergency_override_insufficient_approvals_fails() {
     let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
-
-    let approver1 = Address::generate(&env);
-    let approver2 = Address::generate(&env);
-    let approvers = vec![&env, approver1.clone(), approver2.clone()];
-
     env.mock_all_auths();
-    client.set_emergency_approvers(&approvers, &2);
+    let (approver1, _, _) = setup_emergency(&env, &client);
 
     let id = client.request_withdrawal(&requester, &to, &asset, &1000);
 
@@ -423,17 +431,13 @@ fn emergency_override_insufficient_approvals_fails() {
 fn emergency_override_invalid_approver_fails() {
     let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
-
-    let approver1 = Address::generate(&env);
-    let valid_approvers = vec![&env, approver1];
-
     env.mock_all_auths();
-    client.set_emergency_approvers(&valid_approvers, &1);
+    let stranger = Address::generate(&env);
 
+    let _approver1 = setup_emergency_single(&env, &client);
     let id = client.request_withdrawal(&requester, &to, &asset, &1000);
 
     // Use an address NOT in the approver list
-    let stranger = Address::generate(&env);
     let invalid_approvers = vec![&env, stranger];
     let result = client.try_emergency_override(&id, &invalid_approvers);
     assert_eq!(result, Err(Ok(TreasuryError::InvalidApprover)));
@@ -547,12 +551,8 @@ fn multiple_withdrawals_tracked_independently() {
 fn emergency_override_already_executed_fails() {
     let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
-
-    let approver1 = Address::generate(&env);
-    let approvers = vec![&env, approver1.clone()];
-
     env.mock_all_auths();
-    client.set_emergency_approvers(&approvers, &1);
+    let approver1 = setup_emergency_single(&env, &client);
 
     let id = client.request_withdrawal(&requester, &to, &asset, &1000);
 
@@ -570,12 +570,8 @@ fn emergency_override_already_executed_fails() {
 fn emergency_override_already_cancelled_fails() {
     let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
-
-    let approver1 = Address::generate(&env);
-    let approvers = vec![&env, approver1.clone()];
-
     env.mock_all_auths();
-    client.set_emergency_approvers(&approvers, &1);
+    let approver1 = setup_emergency_single(&env, &client);
 
     let id = client.request_withdrawal(&requester, &to, &asset, &1000);
 

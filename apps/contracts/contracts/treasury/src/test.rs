@@ -4,7 +4,14 @@ use soroban_sdk::{
     vec, Address, Env,
 };
 
-fn setup() -> (Env, Address, TreasuryContractClient<'static>, Address, Address, Address) {
+fn setup() -> (
+    Env,
+    Address,
+    TreasuryContractClient<'static>,
+    Address,
+    Address,
+    Address,
+) {
     let env = Env::default();
     let contract_id = env.register(TreasuryContract, ());
     let client = TreasuryContractClient::new(&env, &contract_id);
@@ -14,16 +21,29 @@ fn setup() -> (Env, Address, TreasuryContractClient<'static>, Address, Address, 
     (env, contract_id, client, admin, requester, approver)
 }
 
-fn setup_initialized(
-) -> (Env, Address, TreasuryContractClient<'static>, Address, Address, Address) {
+fn setup_initialized() -> (
+    Env,
+    Address,
+    TreasuryContractClient<'static>,
+    Address,
+    Address,
+    Address,
+) {
     let (env, contract_id, client, admin, requester, approver) = setup();
     env.mock_all_auths();
     client.initialize(&admin);
     (env, contract_id, client, admin, requester, approver)
 }
 
-fn setup_with_timelock(
-) -> (Env, Address, TreasuryContractClient<'static>, Address, Address, Address, Address) {
+fn setup_with_timelock() -> (
+    Env,
+    Address,
+    TreasuryContractClient<'static>,
+    Address,
+    Address,
+    Address,
+    Address,
+) {
     let (env, contract_id, client, admin, requester, approver) = setup_initialized();
     let asset = Address::generate(&env);
     client.set_timelock(&asset, &3600);
@@ -134,8 +154,7 @@ fn disable_unconfigured_timelock_fails() {
 
 #[test]
 fn request_withdrawal_creates_request() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     env.mock_all_auths();
 
     let to = Address::generate(&env);
@@ -155,8 +174,7 @@ fn request_withdrawal_creates_request() {
 
 #[test]
 fn request_withdrawal_succeeds_with_auth() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
     let id = client.request_withdrawal(&requester, &to, &asset, &1000);
@@ -165,8 +183,7 @@ fn request_withdrawal_succeeds_with_auth() {
 
 #[test]
 fn request_withdrawal_rejects_zero_amount() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
     let result = client.try_request_withdrawal(&requester, &to, &asset, &0);
@@ -175,8 +192,7 @@ fn request_withdrawal_rejects_zero_amount() {
 
 #[test]
 fn request_withdrawal_rejects_negative_amount() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
     let result = client.try_request_withdrawal(&requester, &to, &asset, &(-100));
@@ -185,8 +201,7 @@ fn request_withdrawal_rejects_negative_amount() {
 
 #[test]
 fn request_withdrawal_requires_configured_asset() {
-    let (env, _contract_id, client, _admin, requester, _approver, _asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, _asset) = setup_with_timelock();
     let to = Address::generate(&env);
     let unknown = Address::generate(&env);
     env.mock_all_auths();
@@ -196,8 +211,7 @@ fn request_withdrawal_requires_configured_asset() {
 
 #[test]
 fn request_withdrawal_returns_incremented_ids() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -209,8 +223,7 @@ fn request_withdrawal_returns_incremented_ids() {
 
 #[test]
 fn request_withdrawal_fails_when_disabled() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
     client.disable_timelock(&asset);
@@ -225,8 +238,7 @@ fn request_withdrawal_fails_when_disabled() {
 
 #[test]
 fn execute_withdrawal_after_unlock() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -244,8 +256,7 @@ fn execute_withdrawal_after_unlock() {
 
 #[test]
 fn execute_withdrawal_before_unlock_fails() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -258,8 +269,7 @@ fn execute_withdrawal_before_unlock_fails() {
 
 #[test]
 fn execute_withdrawal_not_found() {
-    let (env, _contract_id, client, _admin, _requester, _approver, _asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, _requester, _approver, _asset) = setup_with_timelock();
     env.mock_all_auths();
 
     let result = client.try_execute_withdrawal(&999);
@@ -268,8 +278,7 @@ fn execute_withdrawal_not_found() {
 
 #[test]
 fn execute_withdrawal_already_executed_fails() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -283,8 +292,7 @@ fn execute_withdrawal_already_executed_fails() {
 
 #[test]
 fn execute_withdrawal_cancelled_fails() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -305,8 +313,7 @@ fn execute_withdrawal_cancelled_fails() {
 
 #[test]
 fn cancel_withdrawal_by_requester() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -320,8 +327,7 @@ fn cancel_withdrawal_by_requester() {
 
 #[test]
 fn cancel_withdrawal_succeeds_with_auth() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -334,8 +340,7 @@ fn cancel_withdrawal_succeeds_with_auth() {
 
 #[test]
 fn cancel_withdrawal_not_found() {
-    let (env, _contract_id, client, _admin, _requester, _approver, _asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, _requester, _approver, _asset) = setup_with_timelock();
     env.mock_all_auths();
     let result = client.try_cancel_withdrawal(&999);
     assert_eq!(result, Err(Ok(TreasuryError::RequestNotFound)));
@@ -343,8 +348,7 @@ fn cancel_withdrawal_not_found() {
 
 #[test]
 fn cancel_withdrawal_already_executed_fails() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -358,8 +362,7 @@ fn cancel_withdrawal_already_executed_fails() {
 
 #[test]
 fn cancel_withdrawal_already_cancelled_fails() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -376,8 +379,7 @@ fn cancel_withdrawal_already_cancelled_fails() {
 
 #[test]
 fn emergency_override_executes_before_unlock() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
 
     let approver1 = Address::generate(&env);
@@ -399,8 +401,7 @@ fn emergency_override_executes_before_unlock() {
 
 #[test]
 fn emergency_override_insufficient_approvals_fails() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
 
     let approver1 = Address::generate(&env);
@@ -420,8 +421,7 @@ fn emergency_override_insufficient_approvals_fails() {
 
 #[test]
 fn emergency_override_invalid_approver_fails() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
 
     let approver1 = Address::generate(&env);
@@ -441,8 +441,7 @@ fn emergency_override_invalid_approver_fails() {
 
 #[test]
 fn emergency_override_no_approvers_set_up_fails() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -495,16 +494,18 @@ fn set_emergency_approvers_succeeds_with_admin_auth() {
 
 #[test]
 fn request_withdrawal_emits_event() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
     client.request_withdrawal(&requester, &to, &asset, &1000);
 
     let events = env.events().all();
-    let empty: soroban_sdk::Vec<(Address, soroban_sdk::Vec<soroban_sdk::Val>, soroban_sdk::Val)> =
-        vec![&env];
+    let empty: soroban_sdk::Vec<(
+        Address,
+        soroban_sdk::Vec<soroban_sdk::Val>,
+        soroban_sdk::Val,
+    )> = vec![&env];
     assert_ne!(events, empty, "expected at least one event to be emitted");
 }
 
@@ -514,8 +515,7 @@ fn request_withdrawal_emits_event() {
 
 #[test]
 fn get_withdrawal_request_not_found() {
-    let (_env, _contract_id, client, _admin, _requester, _approver, _asset) =
-        setup_with_timelock();
+    let (_env, _contract_id, client, _admin, _requester, _approver, _asset) = setup_with_timelock();
     let result = client.try_get_withdrawal_request(&999);
     assert_eq!(result, Err(Ok(TreasuryError::RequestNotFound)));
 }
@@ -526,8 +526,7 @@ fn get_withdrawal_request_not_found() {
 
 #[test]
 fn multiple_withdrawals_tracked_independently() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
     env.mock_all_auths();
 
@@ -546,8 +545,7 @@ fn multiple_withdrawals_tracked_independently() {
 
 #[test]
 fn emergency_override_already_executed_fails() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
 
     let approver1 = Address::generate(&env);
@@ -570,8 +568,7 @@ fn emergency_override_already_executed_fails() {
 
 #[test]
 fn emergency_override_already_cancelled_fails() {
-    let (env, _contract_id, client, _admin, requester, _approver, asset) =
-        setup_with_timelock();
+    let (env, _contract_id, client, _admin, requester, _approver, asset) = setup_with_timelock();
     let to = Address::generate(&env);
 
     let approver1 = Address::generate(&env);
